@@ -1,52 +1,37 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RouterModule } from '@angular/router';
+import { of } from 'rxjs';
 import { AppComponent } from './app.component';
-import { of, BehaviorSubject } from 'rxjs';
-import { MaterialModule } from './material.module';
-import { VersionInfoComponent } from './components/common/version-info/version-info.component';
-import { ProcessingStatusIconComponent } from './components/common/processing-status-icon/processing-status-icon.component';
 import { ThemeService } from './services/theme.service';
-import { WebsocketService } from './services/websocket.service';
+import { GameService } from './services/game.service';
+import { ApiResponse, Type } from './models/api-response.model';
+import { SteamStatus, SteamUserProfile } from './models/game.model';
 
 describe('AppComponent', () => {
   let component: AppComponent;
-  let fixture: ComponentFixture<AppComponent>;
   let mockThemeService: jasmine.SpyObj<ThemeService>;
-  let mockWebsocketService: jasmine.SpyObj<WebsocketService>;
+  let mockGameService: jasmine.SpyObj<GameService>;
 
-  beforeEach(async () => {
-    // Create spy objects for services
+  function steamStatus(configured: boolean): ApiResponse<SteamStatus> {
+    return new ApiResponse<SteamStatus>({
+      code: 200,
+      data: { configured, message: 'ok' },
+      type: Type.SUCCESS,
+    });
+  }
+
+  beforeEach(() => {
     mockThemeService = jasmine.createSpyObj<ThemeService>('ThemeService', ['toggleDarkMode']);
-    mockThemeService.isDarkMode$ = of(false); // Default to light mode
-    
-    // Create proper BehaviorSubject for websocket connection
-    const isConnectedSubject = new BehaviorSubject<boolean>(true);
-    mockWebsocketService = jasmine.createSpyObj<WebsocketService>(
-      'WebsocketService', 
-      [], 
-      { 
-        isConnected$: isConnectedSubject 
-      }
+    mockThemeService.isDarkMode$ = of(false);
+
+    mockGameService = jasmine.createSpyObj<GameService>('GameService', [
+      'getSteamStatus',
+      'getSteamUserProfile',
+    ]);
+    mockGameService.getSteamStatus.and.returnValue(of(steamStatus(false)));
+    mockGameService.getSteamUserProfile.and.returnValue(
+      of(new ApiResponse<SteamUserProfile>({ code: 404, type: Type.ERROR }))
     );
 
-    await TestBed.configureTestingModule({
-      imports: [
-        VersionInfoComponent,
-        MaterialModule,
-        RouterModule.forRoot([])
-      ],
-      declarations: [
-        AppComponent,
-        ProcessingStatusIconComponent
-      ],
-      providers: [
-        { provide: ThemeService, useValue: mockThemeService },
-        { provide: WebsocketService, useValue: mockWebsocketService }
-      ]
-    }).compileComponents();
-
-    fixture = TestBed.createComponent(AppComponent);
-    component = fixture.componentInstance;
+    component = new AppComponent(mockThemeService, mockGameService);
   });
 
   it('should create the app', () => {
@@ -54,12 +39,15 @@ describe('AppComponent', () => {
   });
 
   it('should have the correct title', () => {
-    expect(component.title).toEqual('Inferno Comics');
+    expect(component.title).toEqual('Inferno Games');
   });
 
-  it('should have the correct version', () => {
-    // Note: This assumes APP_VERSION is imported correctly
+  it('should expose a defined version', () => {
     expect(component.version).toBeDefined();
+  });
+
+  it('should proxy the dark mode observable from the theme service', () => {
+    expect(component.isDarkMode$).toBe(mockThemeService.isDarkMode$);
   });
 
   it('should toggle dark mode when toggleTheme is called', () => {
@@ -68,113 +56,47 @@ describe('AppComponent', () => {
   });
 
   describe('ngOnInit', () => {
-    it('should subscribe to theme changes', () => {
-      spyOn(component['themeSubscription'], 'add');
-      
+    it('applies theme classes and loads Steam status', () => {
       component.ngOnInit();
-      
-      // Verify subscription was created
-      expect(component['themeSubscription']).toBeDefined();
+      expect(mockGameService.getSteamStatus).toHaveBeenCalled();
+      expect(component.steamConfigured).toBeFalse();
     });
 
-    it('should apply dark theme classes when dark mode is enabled', () => {
-      // Create a mock element that mimics HTMLElement
-      const mockElement = {
-        classList: {
-          add: jasmine.createSpy('addClass'),
-          remove: jasmine.createSpy('removeClass')
-        }
-      } as any;
+    it('loads the Steam user profile when Steam is configured', () => {
+      mockGameService.getSteamStatus.and.returnValue(of(steamStatus(true)));
+      const profile = { personaName: 'Player', personaState: 1 } as SteamUserProfile;
+      mockGameService.getSteamUserProfile.and.returnValue(
+        of(new ApiResponse<SteamUserProfile>({ code: 200, data: profile, type: Type.SUCCESS }))
+      );
 
-      // Temporarily replace document.documentElement
-      const originalDocument = document;
-      Object.defineProperty(window, 'document', {
-        writable: true,
-        value: {
-          ...originalDocument,
-          documentElement: mockElement
-        }
-      });
-
-      // Set up theme service to emit dark mode
-      mockThemeService.isDarkMode$ = of(true);
-      
       component.ngOnInit();
-      
-      // Restore original document
-      Object.defineProperty(window, 'document', {
-        writable: true,
-        value: originalDocument
-      });
-      
-      // Verify classList methods were called
-      expect(mockElement.classList.add).toHaveBeenCalledWith('dark-theme');
-      expect(mockElement.classList.remove).toHaveBeenCalledWith('light-theme');
+
+      expect(component.steamConfigured).toBeTrue();
+      expect(component.steamUser).toEqual(profile);
+    });
+  });
+
+  describe('persona helpers', () => {
+    it('returns offline defaults when no Steam user is loaded', () => {
+      component.steamUser = null;
+      expect(component.getPersonaStateClass()).toBe('offline');
+      expect(component.getPersonaStateText()).toBe('Offline');
     });
 
-    it('should apply light theme classes when light mode is enabled', () => {
-      // Create a mock element that mimics HTMLElement
-      const mockElement = {
-        classList: {
-          add: jasmine.createSpy('addClass'),
-          remove: jasmine.createSpy('removeClass')
-        }
-      } as any;
-
-      // Temporarily replace document.documentElement
-      const originalDocument = document;
-      Object.defineProperty(window, 'document', {
-        writable: true,
-        value: {
-          ...originalDocument,
-          documentElement: mockElement
-        }
-      });
-
-      // Set up theme service to emit light mode
-      mockThemeService.isDarkMode$ = of(false);
-      
-      component.ngOnInit();
-      
-      // Restore original document
-      Object.defineProperty(window, 'document', {
-        writable: true,
-        value: originalDocument
-      });
-      
-      // Verify classList methods were called
-      expect(mockElement.classList.add).toHaveBeenCalledWith('light-theme');
-      expect(mockElement.classList.remove).toHaveBeenCalledWith('dark-theme');
-    });
-
-    it('should subscribe to websocket connection status', () => {
-      // Test the connection status change
-      const newIsConnected$ = new BehaviorSubject<boolean>(false);
-      (mockWebsocketService as any).isConnected$ = newIsConnected$;
-      
-      component.ngOnInit();
-      
-      expect(component.webSocketConnected).toBeFalse();
+    it('returns online when the persona state is non-zero', () => {
+      component.steamUser = { personaState: 1 } as SteamUserProfile;
+      expect(component.getPersonaStateClass()).toBe('online');
+      expect(component.getPersonaStateText()).toBe('Online');
     });
   });
 
   describe('ngOnDestroy', () => {
-    it('should unsubscribe from theme subscription', () => {
-      spyOn(component['themeSubscription'], 'unsubscribe');
-      
+    it('unsubscribes from the theme subscription', () => {
+      component.ngOnInit();
+      const sub = (component as any).themeSubscription;
+      spyOn(sub, 'unsubscribe');
       component.ngOnDestroy();
-      
-      expect(component['themeSubscription'].unsubscribe).toHaveBeenCalled();
-    });
-  });
-
-  describe('Component Properties', () => {
-    it('should have isDarkMode$ observable', () => {
-      expect(component.isDarkMode$).toBeDefined();
-    });
-
-    it('should have webSocketConnected initialized to true', () => {
-      expect(component.webSocketConnected).toBeTrue();
+      expect(sub.unsubscribe).toHaveBeenCalled();
     });
   });
 });

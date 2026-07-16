@@ -10,6 +10,8 @@
     "watch": "ng build --watch --configuration development",
     "name": "echo ${npm_package_name}",
     "test": "ng test",
+    "test:headless": "ng test --no-watch --browsers ChromeHeadlessNoSandbox",
+    "test:ci": "sh -c 'if [ -z \"$CHROME_BIN\" ] && [ -x /opt/pw-browsers/chromium ]; then export CHROME_BIN=/opt/pw-browsers/chromium; fi; ng test --no-watch --browsers ChromeHeadlessNoSandbox'",
     "lint": "ng lint",
 
     "gen-version": "node scripts/gen-version.js",

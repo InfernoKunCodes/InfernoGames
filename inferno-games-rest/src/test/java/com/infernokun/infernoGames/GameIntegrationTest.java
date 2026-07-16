@@ -352,8 +352,9 @@ class GameIntegrationTest {
         @Test
         @DisplayName("should return error for non-existent game")
         void getNonExistentGame_ReturnsError() throws Exception {
+            // The service throws IllegalArgumentException, mapped to 400 by GlobalExceptionHandler.
             mockMvc.perform(get("/api/games/99999"))
-                    .andExpect(status().is5xxServerError());
+                    .andExpect(status().isBadRequest());
         }
 
         @Test

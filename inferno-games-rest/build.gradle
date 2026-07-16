@@ -4,6 +4,7 @@ plugins {
 	id 'java'
 	id 'org.springframework.boot' version '3.5.8'
 	id 'io.spring.dependency-management' version '1.1.7'
+	id 'jacoco'
 }
 
 group = 'com.infernokun'
@@ -34,7 +35,9 @@ test {
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
+		languageVersion = JavaLanguageVersion.of(
+			(System.getenv('JAVA_TOOLCHAIN_VERSION') ?: '25').toInteger()
+		)
 	}
 }
 
@@ -160,4 +163,50 @@ processResources.dependsOn injectVersionIntoProperties
 
 tasks.named('test') {
 	useJUnitPlatform()
+	finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+	dependsOn test
+	reports {
+		xml.required = true
+		html.required = true
+	}
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+				'**/InfernoGamesRestApplication*',
+				'**/config/**',
+				'**/models/**',
+				'**/repositories/**',
+				'**/exceptions/**',
+				'**/logger/**',
+			])
+		}))
+	}
+}
+
+jacocoTestCoverageVerification {
+	// Mirror the report's exclusions so the threshold is measured against the same
+	// surface (application/config/models/repositories/exceptions/logger are pure
+	// wiring/boilerplate and are not the target of these unit tests).
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: [
+				'**/InfernoGamesRestApplication*',
+				'**/config/**',
+				'**/models/**',
+				'**/repositories/**',
+				'**/exceptions/**',
+				'**/logger/**',
+			])
+		}))
+	}
+	violationRules {
+		rule {
+			limit {
+				minimum = 0.60
+			}
+		}
+	}
 }

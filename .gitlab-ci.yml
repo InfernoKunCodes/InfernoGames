@@ -1,9 +1,105 @@
+spec:
+  inputs:
+    force_run:
+      type: boolean
+      default: false
+      description: "Force all stages to run regardless of file changes"
+---
+
+# Cancel superseded pipelines automatically. When a new commit is pushed to a
+# ref, GitLab cancels the older pipeline's still-running/pending interruptible
+# jobs (tests) so runners aren't wasted on a stale revision. `interruptible` is
+# intentionally left off `build`/`deploy` so an in-progress release is never
+# killed midway by a newer push.
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+
 stages:
+  - test
   - build
   - deploy
 
 variables:
   DOCKER_HOST: "unix:///var/run/docker.sock"
+  GIT_STRATEGY: clone
+  FORCE_RUN: "$[[ inputs.force_run ]]"
+
+test-rest:
+  stage: test
+  image: gradle:9.5.1-jdk25-corretto
+  allow_failure: true
+  interruptible: true
+  variables:
+    JAVA_TOOLCHAIN_VERSION: "25"
+  before_script:
+    - dnf install -y python3 --quiet
+  script:
+    - cd inferno-games-rest
+    - gradle test jacocoTestReport --no-daemon --quiet
+    - |
+      python3 -c "
+      import xml.etree.ElementTree as ET
+      for c in ET.parse('build/reports/jacoco/test/jacocoTestReport.xml').getroot().findall('counter'):
+          if c.get('type') == 'INSTRUCTION':
+              m, cv = int(c.get('missed')), int(c.get('covered'))
+              print(f'Coverage: {cv/(m+cv)*100:.1f}%')
+      "
+  coverage: '/Coverage: (\d+\.\d+)%/'
+  artifacts:
+    when: always
+    reports:
+      junit: inferno-games-rest/build/reports/tests/test/TEST-*.xml
+    paths:
+      - inferno-games-rest/build/reports/jacoco/
+    expire_in: 30 days
+  tags:
+    - docker
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $FORCE_RUN == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - inferno-games-rest/**/*
+        - .gitlab-ci.yml
+
+test-web:
+  stage: test
+  image: node:24-slim
+  allow_failure: true
+  interruptible: true
+  variables:
+    # Cached across runs so we don't re-download the ~170 MB browser every pipeline.
+    PUPPETEER_CACHE_DIR: "$CI_PROJECT_DIR/.chrome-cache"
+  cache:
+    key: chrome-for-testing-131
+    paths:
+      - .chrome-cache/
+  before_script:
+    # apt-install Chromium ONLY for its shared libraries, then run a pinned, known-good
+    # Chrome-for-Testing build so the browser version can't drift out from under CI.
+    # chromium → shared libraries only; unzip → @puppeteer/browsers needs it to extract.
+    - apt-get update -q && apt-get install -y -q chromium unzip
+    - npm install -g pnpm@10 -q
+    - export CHROME_BIN=$(npx --yes @puppeteer/browsers install chrome@131 --path "$PUPPETEER_CACHE_DIR" | tail -1 | awk '{print $NF}')
+    - $CHROME_BIN --version
+  script:
+    - cd inferno-games-web
+    - pnpm install -q
+    - pnpm test --no-watch --browsers=ChromeHeadlessNoSandbox
+  coverage: '/Statements\s+:\s+([\d.]+)/'
+  artifacts:
+    when: always
+    paths:
+      - inferno-games-web/coverage/
+    expire_in: 30 days
+  tags:
+    - docker
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $FORCE_RUN == "true"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - inferno-games-web/**/*
+        - .gitlab-ci.yml
 
 build-rest:
   stage: build
@@ -21,10 +117,12 @@ build-rest:
   tags:
     - docker
   rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $FORCE_RUN == "true"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         - inferno-games-rest/**/*
         - docker-compose.yml
+        - .gitlab-ci.yml
 
 build-web:
   stage: build
@@ -45,10 +143,12 @@ build-web:
   tags:
     - docker
   rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $FORCE_RUN == "true"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       changes:
         - inferno-games-web/**/*
         - docker-compose.yml
+        - .gitlab-ci.yml
 
 deploy:
   stage: deploy
@@ -84,7 +184,7 @@ deploy:
       if [ -n "$BUILT_WEB" ]; then
         SERVICES_TO_RESTART="$SERVICES_TO_RESTART inferno-games-web"
       fi
-      
+
       if [ -n "$SERVICES_TO_RESTART" ]; then
         echo "Restarting services: $SERVICES_TO_RESTART"
         ssh -i ~/.ssh/id_rsa "$STAGE_SERVER_USER@$STAGE_SERVER_HOST" "cd \"$DEPLOY_PATH\" && docker compose pull $SERVICES_TO_RESTART && docker compose up -d $SERVICES_TO_RESTART"

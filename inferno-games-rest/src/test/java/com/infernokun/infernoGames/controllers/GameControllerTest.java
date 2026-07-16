@@ -7,6 +7,7 @@ import com.infernokun.infernoGames.models.dto.GameRequest;
 import com.infernokun.infernoGames.models.enums.GamePlatform;
 import com.infernokun.infernoGames.models.enums.GameStatus;
 import com.infernokun.infernoGames.services.GameService;
+import com.infernokun.infernoGames.services.SteamSyncScheduler;
 import com.infernokun.infernoGames.services.IGDBService.IGDBGameDto;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +38,9 @@ class GameControllerTest {
 
     @MockitoBean
     private GameService gameService;
+
+    @MockitoBean
+    private SteamSyncScheduler steamSyncScheduler;
 
     private ObjectMapper objectMapper;
     private Game testGame;
@@ -565,8 +569,9 @@ class GameControllerTest {
             when(gameService.getGameById(999L))
                     .thenThrow(new IllegalArgumentException("Game not found with id: 999"));
 
+            // IllegalArgumentException is mapped to 400 Bad Request by GlobalExceptionHandler.
             mockMvc.perform(get("/api/games/999"))
-                    .andExpect(status().is5xxServerError());
+                    .andExpect(status().isBadRequest());
         }
 
         @Test

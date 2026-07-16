@@ -112,7 +112,16 @@
                         "styles": [
                             "src/styles.scss"
                         ],
-                        "scripts": []
+                        "stylePreprocessorOptions": {
+                            "includePaths": [
+                                "node_modules/@angular/material/"
+                            ],
+                            "sass": {
+                                "silenceDeprecations": ["color-functions", "global-builtin", "import"]
+                            }
+                        },
+                        "scripts": [],
+                        "codeCoverage": true
                     }
                 }
             }

@@ -12,6 +12,7 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -30,6 +31,10 @@ import java.util.Map;
 @Slf4j
 @Configuration
 @EnableCaching
+// The test profile has no Redis available; skip the Redis-backed cache wiring so the
+// application context can boot against the in-memory (H2) test setup. Production and
+// all other profiles are unaffected.
+@Profile("!test")
 public class RedisConfig {
 
     @Value("${spring.redis.host}")
