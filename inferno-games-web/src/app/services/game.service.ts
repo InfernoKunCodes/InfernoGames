@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, catchError, of } from 'rxjs';
+import { Observable, map, catchError, of, shareReplay, timer, finalize } from 'rxjs';
 import { ApiResponse, Type } from '../models/api-response.model';
 import { Game, GameStats, PlatformStats, GenreStats, GameStatus, GamePlatform, IGDBGame, SteamGameInfo, SteamLibraryStats, SteamStatus, SteamUserProfile } from '../models/game.model';
 import { EnvironmentService } from './environment.service';
@@ -11,6 +11,13 @@ import { BaseService } from './base.service';
 })
 export class GameService extends BaseService {
   private apiUrl: string = '';
+
+  /**
+   * getGameStats, getPlatformStats and getGenreStats all read the same
+   * /stats payload, and the dashboard asks for all three. Without this they
+   * produce three identical requests.
+   */
+  private statsInFlight?: Observable<ApiResponse<GameStats>>;
 
   constructor(
     protected override http: HttpClient,
@@ -339,8 +346,21 @@ export class GameService extends BaseService {
 
   // ─── Statistics ─────────────────────────────────────────────────────────────
 
+  /** Shared for a short window so concurrent callers reuse one response. */
+  private rawStats(): Observable<ApiResponse<GameStats>> {
+    if (!this.statsInFlight) {
+      this.statsInFlight = this.get<ApiResponse<GameStats>>(`${this.apiUrl}/stats`).pipe(
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+      // Released on the next tick, so this only ever collapses the burst a
+      // single view produces and never serves a stale figure later.
+      timer(0).subscribe(() => (this.statsInFlight = undefined));
+    }
+    return this.statsInFlight;
+  }
+
   getGameStats(): Observable<ApiResponse<GameStats>> {
-    return this.get<ApiResponse<GameStats>>(`${this.apiUrl}/stats`).pipe(
+    return this.rawStats().pipe(
       catchError(error => {
         console.error('Error fetching game stats:', error);
         return of(new ApiResponse<GameStats>({
@@ -363,7 +383,7 @@ export class GameService extends BaseService {
 
   getPlatformStats(): Observable<ApiResponse<PlatformStats[]>> {
     // Platform stats are included in the main stats endpoint
-    return this.get<ApiResponse<GameStats>>(`${this.apiUrl}/stats`).pipe(
+    return this.rawStats().pipe(
       map(response => {
         const platformBreakdown = response.data?.platformBreakdown || {};
         const stats: PlatformStats[] = Object.entries(platformBreakdown).map(([platform, count]) => ({
@@ -392,7 +412,7 @@ export class GameService extends BaseService {
 
   getGenreStats(): Observable<ApiResponse<GenreStats[]>> {
     // Genre stats are included in the main stats endpoint
-    return this.get<ApiResponse<GameStats>>(`${this.apiUrl}/stats`).pipe(
+    return this.rawStats().pipe(
       map(response => {
         const genreBreakdown = response.data?.genreBreakdown || {};
         const stats: GenreStats[] = Object.entries(genreBreakdown).map(([genre, count]) => ({
