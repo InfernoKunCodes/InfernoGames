@@ -82,7 +82,7 @@ Root scripts wrap both services:
                  browser
                     |
         +-----------+-----------+
-        |  inferno-games-web    |   nginx, Angular, service worker
+        |  inferno-games-web    |   nginx, Angular
         |  :8710 -> :80         |
         +-----------+-----------+
                     | /api

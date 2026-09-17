@@ -1,7 +1,6 @@
 import {
   ApplicationConfig,
   inject,
-  isDevMode,
   provideAppInitializer,
   provideZoneChangeDetection,
 } from '@angular/core';
@@ -9,12 +8,10 @@ import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from 
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideNativeDateAdapter } from '@angular/material/core';
-import { provideServiceWorker } from '@angular/service-worker';
 
 import { routes } from './app.routes';
 import { EnvironmentService } from './services/environment.service';
 import { httpErrorInterceptor } from './services/http-error.interceptor';
-import { serviceWorkerBypassInterceptor } from './services/service-worker-bypass.interceptor';
 import { dev_log } from './utils/utils';
 
 /**
@@ -41,14 +38,8 @@ export const appConfig: ApplicationConfig = {
       withInMemoryScrolling({ scrollPositionRestoration: 'enabled', anchorScrolling: 'enabled' })
     ),
     provideAnimations(),
-    // Order matters. The bypass interceptor is last so the error interceptor
-    // above it still logs the original request.
-    provideHttpClient(withInterceptors([httpErrorInterceptor, serviceWorkerBypassInterceptor])),
+    provideHttpClient(withInterceptors([httpErrorInterceptor])),
     provideNativeDateAdapter(),
     provideAppInitializer(() => loadEnvironment(inject(EnvironmentService))),
-    provideServiceWorker('ngsw-worker.js', {
-      enabled: !isDevMode(),
-      registrationStrategy: 'registerWhenStable:30000',
-    }),
   ],
 };

@@ -49,8 +49,7 @@ Runtime settings are not compiled in. `EnvironmentService` fetches
 route renders, and `restUrl` drives every API call.
 
 > The initializer rejects when that file cannot be read, which surfaces the
-> failure instead of leaving the app on a blank page. `assets/environment/**` is
-> excluded from service worker caching so the config is never served stale.
+> failure instead of leaving the app on a blank page.
 
 ## Architecture
 
@@ -59,7 +58,7 @@ Standalone throughout. There is no `AppModule`: `main.ts` calls
 
 | Concern | Where |
 | --- | --- |
-| Providers, interceptors, initializer, service worker | `src/app/app.config.ts` |
+| Providers, interceptors, initializer | `src/app/app.config.ts` |
 | Routes | `src/app/app.routes.ts` |
 | Services | `src/app/services/` |
 | Feature components | `src/app/components/` |
@@ -76,28 +75,8 @@ directly. `AppComponent` is `OnPush` and keeps its Steam state in signals, with
 **Templates.** Built-in control flow only. No `*ngIf` or `*ngFor` remain, and
 every `@for` declares a `track`.
 
-**Interceptors**, registered in order:
-
-| Interceptor | Job |
-| --- | --- |
-| `httpErrorInterceptor` | Logs a failed request and rethrows, leaving each service's own fallback alone |
-| `serviceWorkerBypassInterceptor` | Marks every request `ngsw-bypass`. Registered last so the logger still sees the original URL |
-
-## Service worker
-
-`@angular/service-worker`, enabled in the production configuration only and
-registered through `provideServiceWorker` with `registerWhenStable:30000`.
-
-`ngsw-config.json` prefetches the app shell and lazily caches assets. It defines
-**no `dataGroups`**, and the bypass interceptor keeps API traffic out of the
-worker entirely.
-
-> That exclusion is deliberate. Left in the request path, the worker can turn a
-> real network failure into a synthetic response and hide the actual status code
-> from the error handling in the services.
-
-The app is therefore an offline-capable cached shell, but not installable: there
-is no `manifest.webmanifest` and no PWA icons, only `favicon.ico`.
+**Interceptors.** `httpErrorInterceptor` logs a failed request and rethrows,
+leaving each service's own fallback alone.
 
 ## Tests
 
@@ -107,8 +86,7 @@ is no `manifest.webmanifest` and no PWA icons, only `favicon.ico`.
 
 Multi-stage: `node:lts-bullseye` builds, `nginx:alpine` serves. The compile stage
 copies `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `angular.json`,
-the tsconfigs, `ngsw-config.json` and `src/`.
+the tsconfigs and `src/`.
 
-> `pnpm-workspace.yaml` and `ngsw-config.json` both have to be in that list. The
-> first gates whether `pnpm install` succeeds, the second is what the production
-> build reads to emit the service worker.
+> `pnpm-workspace.yaml` has to be in that list: it gates whether `pnpm install`
+> succeeds inside the image.
