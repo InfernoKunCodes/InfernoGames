@@ -1,91 +1,114 @@
-# InfernoGames
-[![Docker Image](https://img.shields.io/docker/v/infernokun/inferno-games-web?label=Docker%20Image)](https://hub.docker.com/r/infernokun/inferno-games-web)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/infernokun/inferno-games-web/ci.yml?label=CI%20Build)](https://github.com/infernokun/inferno-games-web/actions)
+# inferno-games-web
 
-A modern web application built with **Angular 21** to discover, track, and conquer your gaming backlog.
+[![Tests](https://github.com/InfernoKunCodes/InfernoGames/actions/workflows/test.yml/badge.svg)](https://github.com/InfernoKunCodes/InfernoGames/actions/workflows/test.yml)
+[![Image](https://img.shields.io/docker/v/infernokun/inferno-games-web?label=docker)](https://hub.docker.com/r/infernokun/inferno-games-web)
 
-> **Angular Version**: 21 
-> **Base URL**: http://inferno-games-web  
-> **REST API Endpoint**: /api
+Angular front end for [Inferno Games](../README.md). Served by nginx in the
+published image.
 
----
+Part of a monorepo. Clone the whole thing:
 
-## Features
-- **Backlog Tracking**: Manage your "To Play," "Playing," and "Completed" lists.
-- **Game Discovery**: Search and explore a massive database of titles.
-- **Data Insights**: Advanced filtering and sorting using **AG Grid**.
-- **Modern UI**: Fully responsive interface built with **Angular Material**.
-- **Real-time Sync**: Updates across instances via WebSocket integration.
-- **Docker-Ready**: Optimized for containerized deployments.
+```bash
+git clone https://github.com/InfernoKunCodes/InfernoGames.git
+cd InfernoGames/inferno-games-web
+pnpm install
+pnpm start          # http://localhost:4300
+```
 
----
+`pnpm start` expects the API on http://localhost:8080. See the
+[rest README](../inferno-games-rest/README.md) for bringing that up.
+
+> pnpm 11 is required and pinned through `packageManager`. Build scripts are
+> allowlisted in `pnpm-workspace.yaml` under `allowBuilds`, a key pnpm 10 does not
+> read; on pnpm 10 the install fails its pre-run check and takes `pnpm build`
+> down with it.
+
+## Scripts
+
+| Command | Effect |
+| --- | --- |
+| `pnpm start` | Dev server on port 4300, bound to 0.0.0.0 |
+| `pnpm build` | Development build |
+| `pnpm build:prod` | Production build |
+| `pnpm test` | Karma and Jasmine, watch mode |
+| `pnpm test:headless` | Single headless run |
+| `pnpm test:ci` | Headless, picks up a Playwright Chromium if `CHROME_BIN` is unset |
+| `pnpm gen-version` | Regenerate `src/app/version.ts` from `package.json` |
+| `pnpm docker:build` | Build both stages and push to Docker Hub |
+
+Headless runs need a browser. Point `CHROME_BIN` at one:
+
+```bash
+CHROME_BIN=/usr/bin/chromium-browser pnpm test:headless
+```
+
+## Configuration
+
+Runtime settings are not compiled in. `EnvironmentService` fetches
+`assets/environment/app.config.json` from an app initializer before the first
+route renders, and `restUrl` drives every API call.
+
+> The initializer rejects when that file cannot be read, which surfaces the
+> failure instead of leaving the app on a blank page. `assets/environment/**` is
+> excluded from service worker caching so the config is never served stale.
 
 ## Architecture
-The application is structured for scalability and performance:
-- **Frontend**: Angular 21, TypeScript, and SCSS.
-- **UI Components**: Angular Material components for a consistent design.
-- **State Management**: Reactive data flows using RxJS Observables.
-- **Deployment**: Multi-stage Docker builds with Nginx.
 
----
+Standalone throughout. There is no `AppModule`: `main.ts` calls
+`bootstrapApplication`, and providers live in `app.config.ts`.
 
-## Getting Started
+| Concern | Where |
+| --- | --- |
+| Providers, interceptors, initializer, service worker | `src/app/app.config.ts` |
+| Routes | `src/app/app.routes.ts` |
+| Services | `src/app/services/` |
+| Feature components | `src/app/components/` |
+| Shared Material imports | `src/app/material.module.ts` |
 
-### Prerequisites
-- Node.js (v18+ recommended)
-- pnpm (`npm install -g pnpm`)
-- Angular CLI (`pnpm install -g @angular/cli`)
-- Docker (optional)
+**Routing.** Every route is lazy. The seven feature components each build as
+their own chunk, which keeps the initial bundle at roughly 1.16 MB raw against a
+1.4 MB warning budget. A regression that makes a route eager trips the budget.
 
-### Development Setup
-```bash
-# Install dependencies
-pnpm install
+**State.** `ThemeService` holds theme state in a signal that components read
+directly. `AppComponent` is `OnPush` and keeps its Steam state in signals, with
+`computed` for derived values rather than template methods.
 
-# Start the development server
-ng serve
+**Templates.** Built-in control flow only. No `*ngIf` or `*ngFor` remain, and
+every `@for` declares a `track`.
 
-# Navigate to http://localhost:4200/
-```
+**Interceptors**, registered in order:
 
-## Docker Compose
-```yaml
-services:
-  inferno-games-web:
-    image: infernokun/inferno-games-web:latest
-    restart: always
-    environment:
-      - BASE_URL=http://localhost:4200
-      - API_URL=http://localhost:8080/inferno-games-rest/api
-    ports:
-      - "4200:4200"
-```
+| Interceptor | Job |
+| --- | --- |
+| `httpErrorInterceptor` | Logs a failed request and rethrows, leaving each service's own fallback alone |
+| `serviceWorkerBypassInterceptor` | Marks every request `ngsw-bypass`. Registered last so the logger still sees the original URL |
 
-## Project Structure
+## Service worker
 
-- `src/app/components/` - Reusable UI components
-- `src/app/models/` - Data models and interfaces
-- `src/app/services/` - API service layer
-- `src/app/utils/` - Utility functions and animations
-- `src/assets/` - Static assets and configuration files
-- `src/styles/` - Global styles and themes
+`@angular/service-worker`, enabled in the production configuration only and
+registered through `provideServiceWorker` with `registerWhenStable:30000`.
 
----
+`ngsw-config.json` prefetches the app shell and lazily caches assets. It defines
+**no `dataGroups`**, and the bypass interceptor keeps API traffic out of the
+worker entirely.
 
-## Build Process
+> That exclusion is deliberate. Left in the request path, the worker can turn a
+> real network failure into a synthetic response and hide the actual status code
+> from the error handling in the services.
 
-The application uses Nx for build orchestration and supports:
-- Development builds
-- Production builds with optimization
-- Testing configurations
-- Continuous integration workflows
+The app is therefore an offline-capable cached shell, but not installable: there
+is no `manifest.webmanifest` and no PWA icons, only `favicon.ico`.
 
----
+## Tests
 
-## Deployment
+97 specs covering the services, pipes, models, utils and `AppComponent`.
 
-The application is configured for Docker deployment with:
-- Multi-stage Docker builds
-- Environment-specific configurations
-- Nginx reverse proxy setup
-- CORS handling for API communication
+## Image
+
+Multi-stage: `node:lts-bullseye` builds, `nginx:alpine` serves. The compile stage
+copies `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `angular.json`,
+the tsconfigs, `ngsw-config.json` and `src/`.
+
+> `pnpm-workspace.yaml` and `ngsw-config.json` both have to be in that list. The
+> first gates whether `pnpm install` succeeds, the second is what the production
+> build reads to emit the service worker.

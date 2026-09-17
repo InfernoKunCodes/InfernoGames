@@ -1,130 +1,163 @@
-# InfernoGames REST API
+# inferno-games-rest
 
-[![Docker Image](https://img.shields.io/docker/v/infernokun/inferno-games-rest?label=Docker%20Image)](https://hub.docker.com/r/infernokun/inferno-games-rest)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/infernokun/inferno-games-rest/ci.yml?label=CI%20Build)](https://github.com/infernokun/inferno-games-rest/actions)
+[![Tests](https://github.com/InfernoKunCodes/InfernoGames/actions/workflows/test.yml/badge.svg)](https://github.com/InfernoKunCodes/InfernoGames/actions/workflows/test.yml)
+[![Image](https://img.shields.io/docker/v/infernokun/inferno-games-rest?label=docker)](https://hub.docker.com/r/infernokun/inferno-games-rest)
 
-A robust REST API backend built with **Spring Boot 3.x** and **Java 25** to manage and track video game backlogs and collections.
+REST API for [Inferno Games](../README.md). Owns the game library, talks to IGDB
+and Steam, and keeps both cached in Redis.
 
-> **Java Version**: 25
-> **Spring Boot Version**: 3.x
-> **Base URL**: `/api`
-
----
-
-## 🔥 Features
-
-- **Game Library Management**
-    - Track titles, play status, and completion time
-    - Platform-specific library organization
-    - Metadata synchronization with IGDB/RAWG
-    - Support for DLCs and expansions
-
-- **Integration & Sync**
-    - External API integration for game covers and metadata
-    - Nextcloud integration for asset synchronization (box art, manual scans)
-    - Batch processing for library imports
-
-- **Real-time Communication**
-    - **WebSocket** support for live library updates
-    - **Server-Sent Events (SSE)** for long-running import progress tracking
-    - Session and Auth management
-
-- **Performance & Scalability**
-    - **Redis** caching layer for high-frequency game lookups
-    - Asynchronous processing for image recognition and metadata fetching
-    - Database optimization for complex filtering
-
----
-
-## 🏗️ Architecture
-
-The application follows a layered architecture:
-
-- **Controller Layer**: REST endpoints and API handlers
-- **Service Layer**: Core business logic and backlog orchestration
-- **Repository Layer**: Data access via Spring Data JPA
-- **Integration Layer**: Clients for IGDB, Nextcloud, and AI APIs
-- **Utility Layer**: Helper classes for image processing and logging
-
----
-
-## 🛣️ API Endpoints
-
-### Core Resources
-- **Games**: Manage individual game entries and statuses
-- **Platforms**: Track consoles and launchers (Steam, PS5, Retro, etc.)
-- **Stats**: Generate analytics on backlog progress and playtime
-- **Progress**: Track live processing of library imports
-- **Recognition**: Image recognition for game covers and screenshots
-
-### Management Endpoints
-- Cache eviction and management
-- System health and performance metrics
-- Configuration management
-- Version and build information
-
----
-
-## 🛠️ Technology Stack
-
-- **Backend**: Spring Boot 3.x
-- **Language**: Java 25
-- **Database**: PostgreSQL (via JPA/Hibernate)
-- **Caching**: Redis
-- **Documentation**: OpenAPI / Swagger UI
-- **Messaging**: WebSockets & SSE
-- **External APIs**: IGDB, Nextcloud, custom AI recognition models
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- **Java 25+**
-- **PostgreSQL** database
-- **Redis** server
-- **Docker** (optional, for containerized deployments)
-
-### Setup Instructions
-
-1. Clone the repository: `git clone https://github.com/infernokun/inferno-games-rest.git`
-2. Configure database connection in `src/main/resources/application.yml`
-3. Set up Redis connection details
-4. Add your external API keys (IGDB Client ID/Secret)
-5. Run the application: `./gradlew bootRun`
-
----
-
-## 💻 Development
+Part of a monorepo. Clone the whole thing:
 
 ```bash
-# Build the project
-./gradlew build
-
-# Run tests
-./gradlew test
-
-# Run the application locally
-./gradlew bootRun
+git clone https://github.com/InfernoKunCodes/InfernoGames.git
+cd InfernoGames/inferno-games-rest
 ```
 
-## Configuration
+## Running it
 
-The application uses Spring Boot configuration with:
-- `application.yml` for main settings
-- `application-local.yml` for local development
-- Environment variables for sensitive data
+Postgres and Redis have to exist first:
 
----
+```bash
+docker compose -f ../inferno-games-dev/docker-compose.yml up -d
+URL_PREFIX=inferno-games-rest ./gradlew bootRun
+```
 
-## Project Structure
+> `URL_PREFIX` is not optional. `application.yml` sets
+> `server.servlet.contextPath: /${URL_PREFIX}` with no default, so the placeholder
+> has nothing to resolve against when it is unset. The image sets the same context
+> path from its `PROJECT` build arg instead.
 
-- `src/main/java/com/infernokun/infernoGames/` - Main application packages
-- `controllers/` - REST endpoint controllers
-- `services/` - Business logic implementations
-- `repositories/` - Data access objects
-- `models/` - Data transfer objects and entities
-- `clients/` - External API clients
-- `config/` - Application configuration classes
-- `utils/` - Utility classes and helpers
-- `logger/` - Custom logging implementation
+With the prefix above:
+
+| Endpoint | URL |
+| --- | --- |
+| API | http://localhost:8080/inferno-games-rest/api |
+| Swagger UI | http://localhost:8080/inferno-games-rest/swagger-ui.html |
+| Actuator | http://localhost:8080/inferno-games-rest/actuator |
+
+That matches the `restUrl` already in
+`../inferno-games-web/src/assets/environment/app.config.json`, so the web app
+talks to it without further configuration.
+
+Connection settings come from the environment. Defaults and the full list are in
+the [root README](../README.md#environment-variables).
+
+## Layout
+
+| Package | Contents |
+| --- | --- |
+| `controllers` | `GameController` (everything under `/api/games`), `VersionController`, `InfernoGamesRestController` |
+| `services` | `GameService`, `IGDBService`, `SteamService`, `SteamSyncScheduler` |
+| `repositories` | `GameRepository`, a single `JpaRepository<Game, Long>` |
+| `models` | `Game` and its converters. A flat entity, no `@OneToMany` |
+| `config` | `RedisConfig` (caching), plus the rest of the wiring |
+| `utils` | Text cleaning, list converters, the execution-time aspect |
+
+## API
+
+Everything hangs off `/api/games`, plus `/api/version`.
+
+**Library**
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `GET` | `/api/games` | Whole library, title-ordered |
+| `GET` | `/api/games/{id}` | |
+| `POST` | `/api/games` | |
+| `PUT` | `/api/games/{id}` | |
+| `DELETE` | `/api/games/{id}` | |
+| `POST` | `/api/games/{id}/status` | Set play status |
+| `POST` | `/api/games/{id}/favorite` | Toggle favorite |
+| `POST` | `/api/games/{id}/dlc` | Toggle DLC flag |
+
+**Queries**
+
+`GET /api/games/search`, `/search/advanced`, `/status/{status}`,
+`/platform/{platform}`, `/favorites`, `/dlc`, `/recent`, `/completed`, `/stats`.
+
+> These return full lists, not pages.
+
+**IGDB**
+
+`GET /api/games/igdb/search`, `/igdb/{igdbId}`, `/igdb/popular`, `/igdb/recent`,
+`/igdb/upcoming`. Writes: `POST /api/games/igdb/import/{igdbId}`,
+`/{id}/igdb/refresh`, `/igdb/refresh-genres`.
+
+**Steam**
+
+`GET /api/games/steam/status`, `/steam/user`, `/steam/library`,
+`/steam/library/with-genres`, `/steam/library/genre-status`,
+`/steam/library/stats`, `/steam/search`, `/steam/recent`, `/steam/most-played`,
+`/steam/check/{appId}`. Writes: `POST /steam/refresh`, `/{id}/steam/sync`,
+`/steam/sync-all`, `/steam/validate-platforms`, `/steam/migrate`,
+`/steam/library/refresh-genres`.
+
+**Maintenance**
+
+`DELETE /api/games/cache` clears the caches below.
+
+## Caching
+
+`@EnableCaching` over Redis, wired in `config/RedisConfig.java`. The profile is
+`@Profile("!test")`, so tests boot against H2 with no Redis.
+
+| Cache | TTL | Key prefix |
+| --- | --- | --- |
+| `games` | 1 hour | `games:list:` |
+| `game` | 1 hour | `games:detail:` |
+| `gameStats` | 10 minutes | `games:stats:` |
+| `igdbGame` | 7 days | `igdb:game:` |
+| `igdbSearch` | 6 hours | `igdb:search:` |
+| `steamOwnedGames` | 30 minutes | `steam:owned:` |
+| `steamUserProfile` | 15 minutes | `steam:profile:` |
+
+TTLs track how fast the source moves. IGDB metadata is effectively immutable;
+Steam persona state changes constantly. Writes evict explicitly, so the TTLs are
+a backstop rather than the primary invalidation.
+
+## Scheduled work
+
+`SteamSyncScheduler` runs two jobs:
+
+| Cadence | Job |
+| --- | --- |
+| Every 6 hours, 1 minute after boot | Sync the Steam library |
+| Every 24 hours, 30 seconds after boot | Enrich genres |
+
+> `GameService.refreshAllGenresFromIGDB()` calls IGDB once per game with a 250 ms
+> sleep between calls, to stay inside the rate limit. It is sequential and
+> blocking by design, so it takes as long as the library is large.
+
+## Versioning
+
+The version is not declared in `build.gradle`. It is read from `package.json` at
+build time and injected into `application.yml` by the `injectVersionIntoProperties`
+task, then served from `/api/version`. Bump it in `package.json`.
+
+## Tests
+
+```bash
+./gradlew test jacocoTestReport
+```
+
+295 tests. JaCoCo gates instruction coverage at 60% and currently reports 65.4%,
+measured over the code that is not wiring: `InfernoGamesRestApplication`,
+`config`, `models`, `repositories`, `exceptions` and `logger` are excluded.
+
+H2 stands in for Postgres. `RedisConfig` is disabled under the test profile, so
+no Redis is needed.
+
+## Image
+
+Multi-stage: `gradle:jdk25-corretto` compiles, `eclipse-temurin:25-jre-alpine`
+runs it under `tini` as a non-root user.
+
+```bash
+npm run docker:build      # build and push to Docker Hub
+```
+
+> The build needs `PROJECT` and `PORT` build args. `PROJECT` names the jar that
+> gets copied out of the compile stage, so a build without it fails.
+> `--chown` in the linked `COPY` layers uses numeric `1000:1000`, because
+> `--link` builds those layers independently of the base where the `java` user is
+> created and a name cannot be resolved there.
