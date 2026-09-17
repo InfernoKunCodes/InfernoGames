@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { MaterialModule } from '../../../material.module';
 
@@ -6,7 +5,7 @@ import { MaterialModule } from '../../../material.module';
   selector: 'app-custom-paginator',
   templateUrl: './custom-paginator.component.html',
   styleUrls: ['./custom-paginator.component.scss'],
-  imports: [CommonModule, MaterialModule]
+  imports: [MaterialModule]
 })
 export class CustomPaginatorComponent implements OnInit {
   @Input() length: number = 0;

@@ -23,16 +23,17 @@
     </button>
     
     <div class="pages-container">
-      <button 
-        *ngFor="let page of displayedPages; let i = index" 
-        mat-button 
-        class="page-button"
-        [class.active]="page === currentPage"
-        [disabled]="page === -1"
-        (click)="goToPage(page)"
-        [title]="page === -1 ? '' : 'Page ' + page">
-        {{ page === -1 ? '...' : page }}
-      </button>
+      @for (page of displayedPages; track $index) {
+        <button 
+          mat-button 
+          class="page-button"
+          [class.active]="page === currentPage"
+          [disabled]="page === -1"
+          (click)="goToPage(page)"
+          [title]="page === -1 ? '' : 'Page ' + page">
+          {{ page === -1 ? '...' : page }}
+        </button>
+      }
     </div>
     
     <button 
@@ -60,9 +61,11 @@
       [(value)]="pageSize" 
       (selectionChange)="changePageSize($event.value)"
       class="page-size-select">
-      <mat-option *ngFor="let size of pageSizeOptions" [value]="size">
-        {{ size }}
-      </mat-option>
+      @for (size of pageSizeOptions; track size) {
+        <mat-option [value]="size">
+          {{ size }}
+        </mat-option>
+      }
     </mat-select>
     <span>entries</span>
   </div>
