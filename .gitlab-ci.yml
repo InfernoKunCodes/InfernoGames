@@ -6,11 +6,7 @@ spec:
       description: "Force all stages to run regardless of file changes"
 ---
 
-# Cancel superseded pipelines automatically. When a new commit is pushed to a
-# ref, GitLab cancels the older pipeline's still-running/pending interruptible
-# jobs (tests) so runners aren't wasted on a stale revision. `interruptible` is
-# intentionally left off `build`/`deploy` so an in-progress release is never
-# killed midway by a newer push.
+# Cancel superseded pipelines. build/deploy are not interruptible on purpose.
 workflow:
   auto_cancel:
     on_new_commit: interruptible
@@ -68,16 +64,14 @@ test-web:
   allow_failure: true
   interruptible: true
   variables:
-    # Cached across runs so we don't re-download the ~170 MB browser every pipeline.
+    # Cached so the browser is not re-downloaded every run.
     PUPPETEER_CACHE_DIR: "$CI_PROJECT_DIR/.chrome-cache"
   cache:
     key: chrome-for-testing-131
     paths:
       - .chrome-cache/
   before_script:
-    # apt-install Chromium ONLY for its shared libraries, then run a pinned, known-good
-    # Chrome-for-Testing build so the browser version can't drift out from under CI.
-    # chromium → shared libraries only; unzip → @puppeteer/browsers needs it to extract.
+    # chromium for its shared libs, unzip for @puppeteer/browsers. Chrome is pinned.
     - apt-get update -q && apt-get install -y -q chromium unzip
     - npm install -g pnpm@10 -q
     - export CHROME_BIN=$(npx --yes @puppeteer/browsers install chrome@131 --path "$PUPPETEER_CACHE_DIR" | tail -1 | awk '{print $NF}')
