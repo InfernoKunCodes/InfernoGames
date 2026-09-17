@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { of, switchMap } from 'rxjs';
@@ -13,7 +13,10 @@ import { VersionInfoComponent } from './components/version-info/version-info.com
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss'],
-  changeDetection: ChangeDetectionStrategy.OnPush,
+  // Default on purpose. Every page renders inside this component's
+  // router-outlet, and the feature components still update plain fields from
+  // subscribe callbacks. An OnPush root that is not marked dirty makes Angular
+  // skip the whole subtree, so those updates never reach the DOM.
   imports: [RouterOutlet, RouterLink, RouterLinkActive, MaterialModule, VersionInfoComponent],
 })
 export class AppComponent implements OnInit {
