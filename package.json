@@ -15,7 +15,7 @@
     "docker:build-web": "cd inferno-games-web && npm run docker:build",
     "docker:build-rest": "cd inferno-games-rest && npm run docker:build",
 
-    "push:git": "git push gitlab main && git push github main"
+    "push:git": "git push origin main"
   },
   "repository": {
     "type": "git",
