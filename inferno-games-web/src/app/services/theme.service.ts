@@ -1,56 +1,49 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject } from 'rxjs';
+import { Injectable, signal } from '@angular/core';
+
+const THEME_KEY = 'inferno-games-theme';
+// Key used before this app was renamed off the comics scaffold. Read once so an
+// existing preference survives the rename, then rewritten under THEME_KEY.
+const LEGACY_THEME_KEY = 'comic-app-theme';
 
 @Injectable({
   providedIn: 'root',
 })
 export class ThemeService {
-  private darkModeSubject = new BehaviorSubject<boolean>(true); // Default to dark mode
-  public isDarkMode$ = this.darkModeSubject.asObservable();
+  /** Current theme. Read directly by components; dark is the default. */
+  readonly isDarkMode = signal<boolean>(true);
 
   constructor() {
-    this.initializeTheme();
+    this.isDarkMode.set(this.readStoredPreference());
+    this.applyTheme(this.isDarkMode());
   }
 
-  private initializeTheme(): void {
-    // Check if user has a saved preference, otherwise default to dark mode
-    const savedTheme = localStorage.getItem('comic-app-theme');
-    const isDark = savedTheme ? savedTheme === 'dark' : true; // Default to dark
-
-    // Set the initial theme
-    this.darkModeSubject.next(isDark);
-    this.applyTheme(isDark);
+  private readStoredPreference(): boolean {
+    const saved = localStorage.getItem(THEME_KEY) ?? localStorage.getItem(LEGACY_THEME_KEY);
+    return saved ? saved === 'dark' : true;
   }
 
   toggleDarkMode(): void {
-    const newMode = !this.darkModeSubject.value;
-    this.setDarkMode(newMode);
+    this.setDarkMode(!this.isDarkMode());
   }
 
   setDarkMode(isDark: boolean): void {
-    this.darkModeSubject.next(isDark);
+    this.isDarkMode.set(isDark);
     this.applyTheme(isDark);
-    localStorage.setItem('comic-app-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem(THEME_KEY, isDark ? 'dark' : 'light');
+    localStorage.removeItem(LEGACY_THEME_KEY);
   }
 
   private applyTheme(isDark: boolean): void {
     const root = document.documentElement;
 
-    if (isDark) {
-      root.classList.add('dark-theme');
-      root.classList.remove('light-theme');
-    } else {
-      root.classList.add('light-theme');
-      root.classList.remove('dark-theme');
-    }
+    root.classList.toggle('dark-theme', isDark);
+    root.classList.toggle('light-theme', !isDark);
 
-    // Force a repaint
+    // Forces a repaint. Carried over from the original implementation: it costs a
+    // synchronous reflow, but only on an explicit toggle, and dropping it was not
+    // verified against the themed styles.
     root.style.display = 'none';
     root.offsetHeight;
     root.style.display = '';
-  }
-
-  get isDarkMode(): boolean {
-    return this.darkModeSubject.value;
   }
 }
