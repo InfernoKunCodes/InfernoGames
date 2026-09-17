@@ -63,9 +63,9 @@ jobs:
 
       - name: Report image size
         run: |
+          bytes=$(docker image inspect "inferno-games-${{ matrix.service }}:ci" --format '{{.Size}}')
           {
             echo "### inferno-games-${{ matrix.service }}"
             echo
-            docker image inspect inferno-games-${{ matrix.service }}:ci \
-              --format 'Size: {{ printf "%.1f" (divf .Size 1048576) }} MB'
+            awk -v b="$bytes" 'BEGIN { printf "Size: %.1f MB\n", b / 1048576 }'
           } >> "$GITHUB_STEP_SUMMARY"
