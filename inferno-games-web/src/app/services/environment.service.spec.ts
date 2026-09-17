@@ -43,4 +43,23 @@ describe('EnvironmentService', () => {
     expect(service.settings).toEqual(settings);
     expect(service.settings!.restUrl).toBe('http://localhost/api');
   });
+
+  it('rejects when the config file cannot be read', async () => {
+    const loadPromise = service.load();
+    httpMock
+      .expectOne('assets/environment/app.config.json')
+      .flush('not found', { status: 404, statusText: 'Not Found' });
+
+    await expectAsync(loadPromise).toBeRejected();
+    expect(service.settings).toBeUndefined();
+  });
+
+  it('rejects when the request fails outright', async () => {
+    const loadPromise = service.load();
+    httpMock
+      .expectOne('assets/environment/app.config.json')
+      .error(new ProgressEvent('network error'));
+
+    await expectAsync(loadPromise).toBeRejected();
+  });
 });

@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { BaseService } from './base.service';
 
 export interface EnvironmentSettings {
@@ -24,16 +25,18 @@ export class EnvironmentService extends BaseService {
     return this.configSettings;
   }
 
-  public load(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.get<EnvironmentSettings>(this.configUrl).subscribe(
-        (response: EnvironmentSettings) => {
-          this.configSettings = response;
-          resolve(true);
-        }
-      );
-    }).catch((err: any) => {
-      console.log('Error reading configuration file: ', err);
-    });
+  /**
+   * Loads app.config.json before the app boots. Rejects on failure so the
+   * initializer surfaces the error instead of leaving the app on a blank page.
+   */
+  public async load(): Promise<EnvironmentSettings> {
+    try {
+      const settings = await firstValueFrom(this.get<EnvironmentSettings>(this.configUrl));
+      this.configSettings = settings;
+      return settings;
+    } catch (err) {
+      console.error(`Error reading configuration file ${this.configUrl}:`, err);
+      throw err;
+    }
   }
 }
