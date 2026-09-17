@@ -1,6 +1,7 @@
 {
   "name": "inferno-games-web",
   "version": "0.1.6",
+  "packageManager": "pnpm@11.9.0",
   "description": "Angular web frontend for Inferno Games",
   "port": 80,
   "scripts": {

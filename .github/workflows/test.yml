@@ -1,0 +1,134 @@
+name: Tests
+
+# GitLab still owns build and deploy. This workflow exists so a pull request on
+# GitHub is verified before it merges, which the GitLab pipeline never sees.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# A newer push supersedes an in-flight run on the same ref.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    name: Detect changed services
+    runs-on: ubuntu-latest
+    outputs:
+      rest: ${{ steps.filter.outputs.rest }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rest:
+              - 'inferno-games-rest/**'
+              - '.github/workflows/test.yml'
+            web:
+              - 'inferno-games-web/**'
+              - '.github/workflows/test.yml'
+
+  test-rest:
+    name: REST
+    needs: changes
+    if: needs.changes.outputs.rest == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inferno-games-rest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Test
+        run: ./gradlew test jacocoTestReport --no-daemon
+
+      - name: Report coverage
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import xml.etree.ElementTree as ET, pathlib
+          report = pathlib.Path('build/reports/jacoco/test/jacocoTestReport.xml')
+          if not report.exists():
+              print('No coverage report produced.')
+              raise SystemExit(0)
+          root = ET.parse(report).getroot()
+          print('| Metric | Covered | Missed | Coverage |')
+          print('| --- | ---: | ---: | ---: |')
+          for counter in root.findall('counter'):
+              missed, covered = int(counter.get('missed')), int(counter.get('covered'))
+              total = missed + covered
+              pct = f'{covered / total * 100:.2f}%' if total else 'n/a'
+              print(f"| {counter.get('type').title()} | {covered} | {missed} | {pct} |")
+          PY
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rest-test-reports
+          path: |
+            inferno-games-rest/build/reports/tests/test/
+            inferno-games-rest/build/reports/jacoco/
+          retention-days: 30
+
+  test-web:
+    name: Web
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: inferno-games-web
+    env:
+      # Preinstalled on the GitHub-hosted Ubuntu image, so no browser download.
+      CHROME_BIN: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: inferno-games-web/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test --no-watch --browsers=ChromeHeadlessNoSandbox
+
+      - name: Build
+        run: pnpm build --configuration production
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: inferno-games-web/coverage/
+          retention-days: 30
+          if-no-files-found: ignore

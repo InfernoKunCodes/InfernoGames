@@ -7,8 +7,8 @@ WORKDIR /app/
 # Install pnpm globally
 RUN npm install -g pnpm
 
-COPY --link package.json pnpm-lock.yaml /app/
-COPY --link angular.json tsconfig.json tsconfig.app.json /app/
+COPY --link package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
+COPY --link angular.json tsconfig.json tsconfig.app.json ngsw-config.json /app/
 COPY --link src/ /app/src/
 
 RUN --mount=type=cache,target=/root/.npm/_cacache \

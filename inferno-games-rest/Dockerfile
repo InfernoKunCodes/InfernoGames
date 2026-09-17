@@ -39,9 +39,9 @@ ENV PROJECT=${PROJECT}
 ENV JAVA_TOOL_OPTIONS="-Dserver.servlet.contextPath=/${PROJECT} -XX:-TieredCompilation --enable-native-access=ALL-UNNAMED"
 
 # Copy entrypoint and JAR
-COPY --link --chown=java:java scripts/docker-entrypoint.sh /
-COPY --link --chown=java:java --from=compile-stage /app/build/libs/${PROJECT}.jar /app/${PROJECT}.jar
-COPY --link --chown=java:java --from=compile-stage /app/package.json /app/package.json
+COPY --link --chown=1000:1000 scripts/docker-entrypoint.sh /
+COPY --link --chown=1000:1000 --from=compile-stage /app/build/libs/${PROJECT}.jar /app/${PROJECT}.jar
+COPY --link --chown=1000:1000 --from=compile-stage /app/package.json /app/package.json
 
 RUN chmod +x /docker-entrypoint.sh
 

@@ -73,7 +73,7 @@ test-web:
   before_script:
     # chromium for its shared libs, unzip for @puppeteer/browsers. Chrome is pinned.
     - apt-get update -q && apt-get install -y -q chromium unzip
-    - npm install -g pnpm@10 -q
+    - npm install -g pnpm@11 -q
     - export CHROME_BIN=$(npx --yes @puppeteer/browsers install chrome@131 --path "$PUPPETEER_CACHE_DIR" | tail -1 | awk '{print $NF}')
     - $CHROME_BIN --version
   script:

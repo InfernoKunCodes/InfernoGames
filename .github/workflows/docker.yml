@@ -1,0 +1,71 @@
+name: Docker
+
+# Build verification only. GitLab still builds and pushes the published images to
+# Docker Hub, so nothing here logs in to a registry or pushes a tag; this exists
+# to catch a broken Dockerfile on a pull request instead of at release time.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: web
+            context: inferno-games-web
+          - service: rest
+            context: inferno-games-rest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The rest Dockerfile names the jar and the context path from these, so a
+      # build without them copies /app/.jar and fails.
+      - name: Read build args from package.json
+        id: meta
+        working-directory: ${{ matrix.context }}
+        run: |
+          {
+            echo "project=$(jq -r .name package.json)"
+            echo "port=$(jq -r '.port // empty' package.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Both Dockerfiles are multi-stage; runtime-stage is what actually ships.
+      - name: Build runtime image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: runtime-stage
+          push: false
+          load: true
+          tags: inferno-games-${{ matrix.service }}:ci
+          build-args: |
+            PROJECT=${{ steps.meta.outputs.project }}
+            PORT=${{ steps.meta.outputs.port }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+
+      - name: Report image size
+        run: |
+          {
+            echo "### inferno-games-${{ matrix.service }}"
+            echo
+            docker image inspect inferno-games-${{ matrix.service }}:ci \
+              --format 'Size: {{ printf "%.1f" (divf .Size 1048576) }} MB'
+          } >> "$GITHUB_STEP_SUMMARY"
