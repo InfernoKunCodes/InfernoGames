@@ -106,28 +106,42 @@ public class RedisConfig {
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonRedisSerializer))
                 .disableCachingNullValues();
 
-        // Custom configurations for specific caches
+        // Per-cache TTLs. Names must match the @Cacheable values in GameService,
+        // IGDBService and SteamService; anything else falls back to defaultConfig.
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
 
-        // Comic descriptions cache - longer TTL since descriptions don't change often
-        cacheConfigurations.put("comic-descriptions", defaultConfig
+        // Owned library. Evicted explicitly on write, so the TTL is only a backstop.
+        cacheConfigurations.put("games", defaultConfig
+                .entryTtl(Duration.ofHours(1))
+                .prefixCacheNameWith("games:list:"));
+
+        cacheConfigurations.put("game", defaultConfig
+                .entryTtl(Duration.ofHours(1))
+                .prefixCacheNameWith("games:detail:"));
+
+        // Derived from the whole table, so keep it short.
+        cacheConfigurations.put("gameStats", defaultConfig
+                .entryTtl(Duration.ofMinutes(10))
+                .prefixCacheNameWith("games:stats:"));
+
+        // IGDB metadata is external and effectively immutable.
+        cacheConfigurations.put("igdbGame", defaultConfig
                 .entryTtl(Duration.ofDays(7))
-                .prefixCacheNameWith("comics:descriptions:"));
+                .prefixCacheNameWith("igdb:game:"));
 
-        // Comic metadata cache - shorter TTL for frequently changing data
-        cacheConfigurations.put("comic-metadata", defaultConfig
-                .entryTtl(Duration.ofHours(4))
-                .prefixCacheNameWith("comics:metadata:"));
+        cacheConfigurations.put("igdbSearch", defaultConfig
+                .entryTtl(Duration.ofHours(6))
+                .prefixCacheNameWith("igdb:search:"));
 
-        // Series information cache
-        cacheConfigurations.put("series-info", defaultConfig
-                .entryTtl(Duration.ofDays(1))
-                .prefixCacheNameWith("comics:series:"));
-
-        // User-specific caches with shorter TTL
-        cacheConfigurations.put("user-collections", defaultConfig
+        // Playtime moves, so this is deliberately shorter than the IGDB caches.
+        cacheConfigurations.put("steamOwnedGames", defaultConfig
                 .entryTtl(Duration.ofMinutes(30))
-                .prefixCacheNameWith("users:collections:"));
+                .prefixCacheNameWith("steam:owned:"));
+
+        // Carries online status, which changes fastest of anything here.
+        cacheConfigurations.put("steamUserProfile", defaultConfig
+                .entryTtl(Duration.ofMinutes(15))
+                .prefixCacheNameWith("steam:profile:"));
 
         return RedisCacheManager.builder(redisConnectionFactory)
                 .cacheDefaults(defaultConfig)
