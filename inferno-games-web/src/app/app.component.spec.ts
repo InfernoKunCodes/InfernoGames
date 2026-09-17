@@ -1,3 +1,5 @@
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { AppComponent } from './app.component';
 import { ThemeService } from './services/theme.service';
@@ -18,9 +20,14 @@ describe('AppComponent', () => {
     });
   }
 
+  /** Built after the spies are armed, since ngOnInit reads them immediately. */
+  function createComponent(): AppComponent {
+    return TestBed.runInInjectionContext(() => new AppComponent());
+  }
+
   beforeEach(() => {
     mockThemeService = jasmine.createSpyObj<ThemeService>('ThemeService', ['toggleDarkMode']);
-    mockThemeService.isDarkMode$ = of(false);
+    (mockThemeService as unknown as { isDarkMode: unknown }).isDarkMode = signal(false);
 
     mockGameService = jasmine.createSpyObj<GameService>('GameService', [
       'getSteamStatus',
@@ -31,7 +38,14 @@ describe('AppComponent', () => {
       of(new ApiResponse<SteamUserProfile>({ code: 404, type: Type.ERROR }))
     );
 
-    component = new AppComponent(mockThemeService, mockGameService);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: ThemeService, useValue: mockThemeService },
+        { provide: GameService, useValue: mockGameService },
+      ],
+    });
+
+    component = createComponent();
   });
 
   it('should create the app', () => {
@@ -46,8 +60,8 @@ describe('AppComponent', () => {
     expect(component.version).toBeDefined();
   });
 
-  it('should proxy the dark mode observable from the theme service', () => {
-    expect(component.isDarkMode$).toBe(mockThemeService.isDarkMode$);
+  it('should read dark mode from the theme service', () => {
+    expect(component.isDarkMode()).toBeFalse();
   });
 
   it('should toggle dark mode when toggleTheme is called', () => {
@@ -56,10 +70,12 @@ describe('AppComponent', () => {
   });
 
   describe('ngOnInit', () => {
-    it('applies theme classes and loads Steam status', () => {
+    it('loads Steam status and skips the profile when Steam is not configured', () => {
       component.ngOnInit();
       expect(mockGameService.getSteamStatus).toHaveBeenCalled();
-      expect(component.steamConfigured).toBeFalse();
+      expect(component.steamConfigured()).toBeFalse();
+      expect(mockGameService.getSteamUserProfile).not.toHaveBeenCalled();
+      expect(component.steamUser()).toBeNull();
     });
 
     it('loads the Steam user profile when Steam is configured', () => {
@@ -69,34 +85,31 @@ describe('AppComponent', () => {
         of(new ApiResponse<SteamUserProfile>({ code: 200, data: profile, type: Type.SUCCESS }))
       );
 
+      component = createComponent();
       component.ngOnInit();
 
-      expect(component.steamConfigured).toBeTrue();
-      expect(component.steamUser).toEqual(profile);
+      expect(component.steamConfigured()).toBeTrue();
+      expect(component.steamUser()).toEqual(profile);
     });
   });
 
-  describe('persona helpers', () => {
+  describe('persona state', () => {
     it('returns offline defaults when no Steam user is loaded', () => {
-      component.steamUser = null;
-      expect(component.getPersonaStateClass()).toBe('offline');
-      expect(component.getPersonaStateText()).toBe('Offline');
+      component.steamUser.set(null);
+      expect(component.personaStateClass()).toBe('offline');
+      expect(component.personaStateText()).toBe('Offline');
+    });
+
+    it('returns offline when the persona state is zero', () => {
+      component.steamUser.set({ personaState: 0 } as SteamUserProfile);
+      expect(component.personaStateClass()).toBe('offline');
+      expect(component.personaStateText()).toBe('Offline');
     });
 
     it('returns online when the persona state is non-zero', () => {
-      component.steamUser = { personaState: 1 } as SteamUserProfile;
-      expect(component.getPersonaStateClass()).toBe('online');
-      expect(component.getPersonaStateText()).toBe('Online');
-    });
-  });
-
-  describe('ngOnDestroy', () => {
-    it('unsubscribes from the theme subscription', () => {
-      component.ngOnInit();
-      const sub = (component as any).themeSubscription;
-      spyOn(sub, 'unsubscribe');
-      component.ngOnDestroy();
-      expect(sub.unsubscribe).toHaveBeenCalled();
+      component.steamUser.set({ personaState: 1 } as SteamUserProfile);
+      expect(component.personaStateClass()).toBe('online');
+      expect(component.personaStateText()).toBe('Online');
     });
   });
 });

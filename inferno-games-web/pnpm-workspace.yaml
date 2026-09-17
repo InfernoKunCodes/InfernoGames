@@ -1,0 +1,9 @@
+# Build scripts pnpm is allowed to run. pnpm exits non-zero from its pre-run
+# dependency check when a dependency wants to run one and is not listed here,
+# which breaks `pnpm build` and any CI job that shells through a pnpm script.
+# esbuild backs the Angular builder; the rest come in transitively.
+allowBuilds:
+  '@parcel/watcher': true
+  esbuild: true
+  lmdb: true
+  msgpackr-extract: true

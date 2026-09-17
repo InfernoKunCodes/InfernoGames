@@ -34,11 +34,11 @@
     </nav>
 
     <!-- Steam User Profile -->
-    @if (steamUser) {
-      <a [href]="steamUser.profileUrl" target="_blank" class="steam-user-profile" [matTooltip]="getPersonaStateText()">
+    @if (steamUser(); as steamUser) {
+      <a [href]="steamUser.profileUrl" target="_blank" class="steam-user-profile" [matTooltip]="personaStateText()">
         <div class="steam-avatar-wrapper">
           <img [src]="steamUser.avatarMedium" [alt]="steamUser.personaName" class="steam-avatar">
-          <span class="steam-status-indicator" [class]="getPersonaStateClass()"></span>
+          <span class="steam-status-indicator" [class]="personaStateClass()"></span>
         </div>
         <span class="steam-username">{{ steamUser.personaName }}</span>
       </a>
@@ -46,8 +46,8 @@
 
     <!-- Theme Toggle (always visible) -->
     <button mat-icon-button class="icon-btn theme-toggle" (click)="toggleTheme()"
-            [attr.aria-label]="(isDarkMode$ | async) ? 'Switch to light mode' : 'Switch to dark mode'">
-      <mat-icon>{{ (isDarkMode$ | async) ? 'light_mode' : 'dark_mode' }}</mat-icon>
+            [attr.aria-label]="isDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'">
+      <mat-icon>{{ isDarkMode() ? 'light_mode' : 'dark_mode' }}</mat-icon>
     </button>
 
     <!-- Mobile Hamburger Menu (hidden on desktop) -->
@@ -56,12 +56,12 @@
     </button>
 
     <mat-menu #mobileMenu="matMenu" class="mobile-nav-menu">
-      @if (steamUser) {
+      @if (steamUser(); as steamUser) {
         <div class="mobile-steam-profile">
           <img [src]="steamUser.avatarMedium" [alt]="steamUser.personaName" class="steam-avatar">
           <div class="steam-info">
             <span class="steam-username">{{ steamUser.personaName }}</span>
-            <span class="steam-status" [class]="getPersonaStateClass()">{{ getPersonaStateText() }}</span>
+            <span class="steam-status" [class]="personaStateClass()">{{ personaStateText() }}</span>
           </div>
         </div>
         <mat-divider></mat-divider>
